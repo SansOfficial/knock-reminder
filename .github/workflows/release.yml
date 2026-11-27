@@ -1,0 +1,93 @@
+name: 构建并发布 Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # 分别在 macOS 和 Windows 环境中打包桌面安装包
+  build:
+    name: 打包 (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macOS
+            build_cmd: npx electron-builder --mac --arm64 --x64 --publish never
+            artifact_path: dist/*.dmg
+          - os: windows-latest
+            platform: Windows
+            build_cmd: npx electron-builder --win --publish never
+            artifact_path: dist/*.exe
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 构建安装包
+        env:
+          # 未配置签名证书时跳过自动代码签名检测
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: ${{ matrix.build_cmd }}
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: ${{ matrix.artifact_path }}
+          if-no-files-found: error
+
+  # 汇总所有平台产物并创建 GitHub Release
+  release:
+    name: 创建 GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 下载所有平台构建产物
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: 发布 Release 并上传安装包
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ls -la artifacts/
+
+          cat << 'EOF' > release-notes.md
+          ### 安装说明
+          - **macOS**：下载对应架构的 `.dmg` 安装包（Apple Silicon 芯片选含 `arm64` 的版本，Intel 芯片选另一个版本）。由于未进行苹果开发者签名，首次打开请**右键点击应用 → 打开**。
+          - **Windows**：下载 `.exe` 安装程序运行即可。
+          EOF
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" artifacts/* --clobber
+          else
+            gh release create "$TAG" artifacts/* \
+              --title "敲屏提醒 $TAG" \
+              --notes-file release-notes.md \
+              --generate-notes
+          fi
