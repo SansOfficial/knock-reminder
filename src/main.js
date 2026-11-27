@@ -261,13 +261,24 @@ function openOverlay() {
   overlayWin.setAlwaysOnTop(true, 'screen-saver');
   overlayWin.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   overlayWin.loadFile(path.join(__dirname, 'overlay.html'));
-  overlayWin.once('ready-to-show', () => {
+
+  // 等渲染进程完成图片解码、WebGL 初始化并画好首帧后再显示，避免透明窗口提前抢占焦点导致卡顿体感
+  let shown = false;
+  const reveal = () => {
+    if (shown || !overlayWin || overlayWin.isDestroyed()) return;
+    shown = true;
+    clearTimeout(fallbackTimer);
     overlayWin.setBounds({ x, y, width, height });
     overlayWin.show();
     if (IS_MAC) app.focus({ steal: true });
     overlayWin.focus();
-  });
+  };
+  const fallbackTimer = setTimeout(reveal, 2500);
+  ipcMain.once('overlay:ready', reveal);
+
   overlayWin.on('closed', () => {
+    clearTimeout(fallbackTimer);
+    ipcMain.removeListener('overlay:ready', reveal);
     overlayWin = null;
     current = null;
     setTimeout(showNext, 800);

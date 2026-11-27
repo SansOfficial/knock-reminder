@@ -91,12 +91,16 @@ function knockSound(withGlass, heavy) {
 let charCv = null;
 let charCtx = null;
 let maskCv = null;
+let maskCtx = null;
+let featherCv = null;
+let shadowCv = null;
+let shadowCtx = null;
 
 function setupCharCanvas(w, h) {
   const figure = $('#figure');
   figure.style.width = `${w}px`;
   figure.style.height = `${h}px`;
-  const dpr = window.devicePixelRatio || 1;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   charCv = document.createElement('canvas');
   charCv.className = 'char';
   charCv.width = Math.round((w + PAD * 2) * dpr);
@@ -104,9 +108,40 @@ function setupCharCanvas(w, h) {
   charCv.style.cssText = `left:${-PAD}px;top:${-PAD}px;width:${w + PAD * 2}px;height:${h + PAD * 2}px`;
   charCtx = charCv.getContext('2d');
   charCtx.imageSmoothingQuality = 'high';
+
+  const mw = Math.round(w * dpr);
+  const mh = Math.round(h * dpr);
   maskCv = document.createElement('canvas');
-  maskCv.width = Math.round(w * dpr);
-  maskCv.height = Math.round(h * dpr);
+  maskCv.width = mw;
+  maskCv.height = mh;
+  maskCtx = maskCv.getContext('2d');
+  maskCtx.imageSmoothingQuality = 'high';
+
+  // 预先生成羽化遮罩，避免每帧重复创建渐变对象
+  featherCv = document.createElement('canvas');
+  featherCv.width = mw;
+  featherCv.height = mh;
+  const fx = featherCv.getContext('2d');
+  const gx = fx.createLinearGradient(0, 0, mw, 0);
+  gx.addColorStop(0, 'rgba(0,0,0,0)');
+  gx.addColorStop(0.1, '#000');
+  gx.addColorStop(0.93, '#000');
+  gx.addColorStop(1, 'rgba(0,0,0,0)');
+  fx.fillStyle = gx;
+  fx.fillRect(0, 0, mw, mh);
+  fx.globalCompositeOperation = 'destination-in';
+  const gy = fx.createLinearGradient(0, 0, 0, mh);
+  gy.addColorStop(0, 'rgba(0,0,0,0)');
+  gy.addColorStop(0.04, '#000');
+  fx.fillStyle = gy;
+  fx.fillRect(0, 0, mw, mh);
+
+  // 低分辨率阴影画布：利用缩略图放大时的双线性插值实现柔和投影，替代极慢的 2D drop-shadow 滤镜
+  shadowCv = document.createElement('canvas');
+  shadowCv.width = Math.max(16, Math.round(mw / 8));
+  shadowCv.height = Math.max(16, Math.round(mh / 8));
+  shadowCtx = shadowCv.getContext('2d');
+
   figure.appendChild(charCv);
   figW = w;
 }
@@ -114,29 +149,27 @@ function setupCharCanvas(w, h) {
 // feather:精灵图格子边缘的硬边要羽化掉
 // trail:保留上一帧的比例(0 = 不留残影)
 function paintChar(src, sx, sy, sw, sh, feather, trail = 0) {
-  const dpr = window.devicePixelRatio || 1;
-  const m = maskCv.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const m = maskCtx;
   const W = maskCv.width;
   const H = maskCv.height;
   m.globalCompositeOperation = 'source-over';
   m.clearRect(0, 0, W, H);
-  m.imageSmoothingQuality = 'high';
   m.drawImage(src, sx, sy, sw, sh, 0, 0, W, H);
   if (feather) {
     m.globalCompositeOperation = 'destination-in';
-    const gx = m.createLinearGradient(0, 0, W, 0);
-    gx.addColorStop(0, 'rgba(0,0,0,0)');
-    gx.addColorStop(0.1, '#000');
-    gx.addColorStop(0.93, '#000');
-    gx.addColorStop(1, 'rgba(0,0,0,0)');
-    m.fillStyle = gx;
-    m.fillRect(0, 0, W, H);
-    const gy = m.createLinearGradient(0, 0, 0, H);
-    gy.addColorStop(0, 'rgba(0,0,0,0)');
-    gy.addColorStop(0.04, '#000');
-    m.fillStyle = gy;
-    m.fillRect(0, 0, W, H);
+    m.drawImage(featherCv, 0, 0);
   }
+
+  // 用低分辨率画布生成柔和投影（比 ctx.filter = drop-shadow 快数十倍）
+  const sc = shadowCtx;
+  sc.globalCompositeOperation = 'source-over';
+  sc.clearRect(0, 0, shadowCv.width, shadowCv.height);
+  sc.drawImage(maskCv, 0, 0, shadowCv.width, shadowCv.height);
+  sc.globalCompositeOperation = 'source-in';
+  sc.fillStyle = 'rgba(0,0,0,0.34)';
+  sc.fillRect(0, 0, shadowCv.width, shadowCv.height);
+
   const c = charCtx;
   if (trail > 0) {
     // 快速出拳时不清空,而是把上一帧淡掉,留下一道残影
@@ -147,9 +180,9 @@ function paintChar(src, sx, sy, sw, sh, feather, trail = 0) {
   } else {
     c.clearRect(0, 0, charCv.width, charCv.height);
   }
-  c.filter = `drop-shadow(0 ${12 * dpr}px ${18 * dpr}px rgba(0,0,0,.42))`;
-  c.drawImage(maskCv, PAD * dpr, PAD * dpr);
-  c.filter = 'none';
+  const padPx = PAD * dpr;
+  c.drawImage(shadowCv, padPx, padPx + 12 * dpr, W, H);
+  c.drawImage(maskCv, padPx, padPx);
   glass?.markChar();
 }
 
@@ -470,6 +503,10 @@ function startCountdown(sec) {
     if (e.key === 'Escape' || e.key === 'Enter') leave('done');
   });
 
+  // 所有资源解码并完成首帧绘制后，立刻通知主进程显示窗口，避免透明全屏窗口提前抢占焦点
+  window.api.overlayReady();
+  await new Promise(requestAnimationFrame);
+
   // 从屏幕下方冒出来
   await $('#buddy').animate(
     [{ transform: 'translateY(110%)' }, { transform: 'translateY(-6%)', offset: 0.75 }, { transform: 'translateY(0)' }],
@@ -477,6 +514,23 @@ function startCountdown(sec) {
   ).finished;
 
   startCountdown(data.autoCloseSec);
+  // 利用挥拳前的停顿提前预计算碎玻璃贴图，确保第一拳命中瞬间零卡顿
+  if (glass && !glass.cracked) {
+    setTimeout(() => {
+      if (!running || glass.cracked) return;
+      if (sprite) {
+        const firstHit = sprite.combo.find((c) => c[2] === 'hit');
+        if (firstHit) {
+          const [px, py] = fistPoint(firstHit[3], firstHit[4]);
+          glass.prepare(px, py);
+        }
+      } else {
+        const r = $('#figure').getBoundingClientRect();
+        const [px, py] = toLocal(r.left + r.width / 2, r.top + r.height * 0.3);
+        glass.prepare(px, py);
+      }
+    }, 60);
+  }
   if (sprite) await playIdle(400); // 先瞪一眼再动手
   knockLoop();
 })();

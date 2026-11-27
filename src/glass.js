@@ -66,6 +66,12 @@ vec4 charAt(vec2 px) {
 // 出拳时形象沿着"从拳头往外"的方向拉出径向模糊,砸中瞬间红蓝通道再炸开一下
 vec4 charFx(vec2 px) {
   if (uZoom.z < .002 && uZoom.w < .002) return charAt(px);
+  // 空白区域快速裁剪：仅对形象包围盒附近像素执行 12 次采样循环，避免全屏空跑
+  vec2 margin = uCharRect.zw * .25 + vec2(40.);
+  if (px.x < uCharRect.x - margin.x || px.y < uCharRect.y - margin.y ||
+      px.x > uCharRect.x + uCharRect.z + margin.x || px.y > uCharRect.y + uCharRect.w + margin.y) {
+    return vec4(0.);
+  }
   vec2 c = uZoom.xy;
   float k = uZoom.w * .03;
   vec4 acc = vec4(0.);
@@ -327,7 +333,8 @@ void main() {
 
   // 按裂纹把屏幕切成碎片,每块碎片一个错位方向 → 法线图
   function shardMap(net, W, H) {
-    const s = Math.min(1, Math.sqrt(2.4e6 / (W * H)));
+    // 法线图与距离场由 GPU 线性插值采样，控制在 45 万像素以内即可兼顾清晰度与计算速度
+    const s = Math.min(1, Math.sqrt(0.45e6 / (W * H)));
     const w = Math.round(W * s);
     const h = Math.round(H * s);
     const c = canvas2d(w, h);
@@ -486,7 +493,8 @@ void main() {
 
       const W = (this.W = window.innerWidth);
       const H = (this.H = window.innerHeight);
-      const dpr = (this.dpr = Math.min(window.devicePixelRatio || 1, 2));
+      // 限制裂纹与画布渲染倍率上限，避免 4K/Retina 屏每帧重建大尺寸 Mipmap 造成掉帧
+      const dpr = (this.dpr = Math.min(window.devicePixelRatio || 1, 1.5));
       canvas.width = Math.round(W * dpr);
       canvas.height = Math.round(H * dpr);
 
@@ -549,6 +557,7 @@ void main() {
       this.lastT = performance.now();
 
       this.net = null;
+      this.prepared = null;
       this.flashT = -1e9;
       this.hitT = -1e9;
       this.alpha = 1;
@@ -587,9 +596,9 @@ void main() {
       return !!this.net;
     }
 
-    // 第一拳:砸出唯一的撞击点,生成整张裂纹网
-    crack(x, y) {
-      if (this.net) return this.advance();
+    // 提前在挥拳前预计算裂纹网与法线/距离场贴图并上传到 GPU（此时 uFront 为 0 不可见），消除命中瞬间的同步卡顿
+    prepare(x, y) {
+      if (this.net || this.prepared) return;
       const net = buildNetwork(x, y, this.W, this.H);
       const map = shardMap(net, this.W, this.H);
       const gl = this.gl;
@@ -600,6 +609,22 @@ void main() {
       gl.bindTexture(gl.TEXTURE_2D, this.tDist);
       gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, map.dist);
       gl.uniform2f(this.u.uCenter, x, y);
+      this.prepared = { x, y, net };
+    }
+
+    // 第一拳:砸出唯一的撞击点,生成整张裂纹网
+    crack(x, y) {
+      if (this.net) return this.advance();
+      let net;
+      if (this.prepared && Math.hypot(this.prepared.x - x, this.prepared.y - y) < 120) {
+        net = this.prepared.net;
+        this.prepared = null;
+      } else {
+        this.prepared = null;
+        this.prepare(x, y);
+        net = this.prepared.net;
+        this.prepared = null;
+      }
       this.net = { ...net, i: 0, stage: 0, hits: 1, front: 0, target: net.R * STAGES[0], crushDrawn: false };
       this.last = performance.now();
       this.flashT = this.hitT = performance.now();

@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('api', {
   onConfigChanged: (cb) => ipcRenderer.on('config:changed', (_e, cfg) => cb(cfg)),
 
   overlayData: () => ipcRenderer.invoke('overlay:data'),
+  overlayReady: () => ipcRenderer.send('overlay:ready'),
   done: () => ipcRenderer.send('overlay:done'),
   snooze: () => ipcRenderer.send('overlay:snooze'),
 });
