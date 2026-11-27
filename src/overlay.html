@@ -13,20 +13,25 @@
         <div id="figure"></div>
       </div>
       <div id="bubble" class="hidden">
+        <div class="eyebrow"><span class="dot"></span><span id="clock"></span><span>到点提醒</span></div>
         <div id="title"></div>
         <div id="message"></div>
         <div id="actions">
-          <button id="done" class="primary">搞定 ✓</button>
+          <button id="done" class="primary">搞定</button>
           <button id="snooze"></button>
         </div>
-        <div id="countdown"></div>
+        <div id="countdown"><span></span><span class="keys"><kbd>Esc</kbd> 关闭</span></div>
+        <div class="progress"><i></i></div>
       </div>
     </div>
-    <!-- 玻璃在形象和人之间,所以裂纹、闪光盖在形象上面 -->
+    <!-- 玻璃在形象和人之间:形象画在玻璃画布里,碎片会折射它;提醒卡片贴在玻璃上面 -->
+    <canvas id="glass"></canvas>
     <svg id="cracks" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="flash"></div>
+    <canvas id="debris"></canvas>
     <div id="bangs"></div>
   </div>
+  <script src="glass.js"></script>
   <script src="overlay.js"></script>
 </body>
 </html>

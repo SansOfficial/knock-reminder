@@ -37,6 +37,7 @@ const DEFAULT_CONFIG = {
     sound: true,
     volume: 0.8,
     dim: true,
+    scale: 0.55,
     autoCloseSec: 60,
     snoozeMin: 5,
     openAtLogin: false,
@@ -105,6 +106,7 @@ function sanitizeReminder(r) {
 
 function sanitizeSettings(s) {
   const d = DEFAULT_CONFIG.settings;
+  const scale = Number(s.scale);
   return {
     activeStart: isHM(s.activeStart) ? s.activeStart : d.activeStart,
     activeEnd: isHM(s.activeEnd) ? s.activeEnd : d.activeEnd,
@@ -112,6 +114,7 @@ function sanitizeSettings(s) {
     sound: !!s.sound,
     volume: Math.min(1, Math.max(0, Number(s.volume) || 0)),
     dim: !!s.dim,
+    scale: Number.isFinite(scale) ? Math.min(1.2, Math.max(0.3, Math.round(scale * 100) / 100)) : d.scale,
     autoCloseSec: clampInt(s.autoCloseSec, 0, 3600, d.autoCloseSec),
     snoozeMin: clampInt(s.snoozeMin, 1, 120, d.snoozeMin),
     openAtLogin: !!s.openAtLogin,
@@ -422,6 +425,7 @@ ipcMain.handle('overlay:data', () => {
     sound: s.sound,
     volume: s.volume,
     dim: s.dim,
+    scale: s.scale,
     autoCloseSec: s.autoCloseSec,
     snoozeMin: s.snoozeMin,
   };

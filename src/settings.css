@@ -119,6 +119,7 @@ input[type="range"] { accent-color: var(--accent); width: 140px; }
 .row:first-child { border-top: none; }
 .label small { display: block; color: var(--muted); font-size: 12px; }
 .ctrl { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+.range-val { min-width: 42px; text-align: right; font-variant-numeric: tabular-nums; }
 .hint { color: var(--muted); font-size: 12px; margin: 10px 2px 0; }
 
 /* 编辑弹窗 */

@@ -18,179 +18,228 @@ html, body {
 }
 body.dim #dim { opacity: 1; }
 
+/* 只平移不旋转:玻璃画布要靠位置换算对齐形象 */
 #shaker { position: fixed; inset: 0; }
 #shaker.shake { animation: shake 0.32s cubic-bezier(.36, .07, .19, .97); }
 #shaker.shake-heavy { animation: shake-heavy 0.46s cubic-bezier(.2, .6, .3, 1); }
 @keyframes shake-heavy {
-  0% { transform: translate(0, 0) scale(1); }
-  8% { transform: translate(-26px, 16px) rotate(-1.2deg) scale(1.015); }
-  18% { transform: translate(22px, -18px) rotate(1deg); }
-  30% { transform: translate(-16px, 12px) rotate(-0.7deg); }
-  44% { transform: translate(11px, -8px) rotate(0.4deg); }
-  60% { transform: translate(-6px, 4px); }
+  0% { transform: translate(0, 0); }
+  8% { transform: translate(-24px, 15px); }
+  18% { transform: translate(20px, -16px); }
+  30% { transform: translate(-14px, 11px); }
+  44% { transform: translate(10px, -7px); }
+  60% { transform: translate(-5px, 4px); }
   78% { transform: translate(3px, -2px); }
   100% { transform: translate(0, 0); }
 }
 @keyframes shake {
-  0%, 100% { transform: translate(0, 0) rotate(0); }
-  15% { transform: translate(-14px, 8px) rotate(-0.6deg); }
-  30% { transform: translate(12px, -10px) rotate(0.5deg); }
-  45% { transform: translate(-9px, 6px) rotate(-0.3deg); }
-  60% { transform: translate(7px, -4px) rotate(0.2deg); }
-  80% { transform: translate(-3px, 2px); }
+  0%, 100% { transform: translate(0, 0); }
+  15% { transform: translate(-12px, 7px); }
+  30% { transform: translate(10px, -8px); }
+  45% { transform: translate(-7px, 5px); }
+  60% { transform: translate(5px, -3px); }
+  80% { transform: translate(-2px, 1px); }
 }
 
-#cracks {
+#glass, #debris, #cracks, #flash, #bangs {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
-  transition: opacity 0.35s;
 }
+#glass { z-index: 1; }
+#cracks { z-index: 1; display: none; transition: opacity 0.35s; }
+body:not(.webgl) #cracks { display: block; }
+#flash { z-index: 2; opacity: 0; }
+#debris { z-index: 2; transition: opacity 0.3s; }
+#bangs { z-index: 4; }
+
 #cracks .crack {
   transform-box: view-box;
-  animation: crack-in 0.14s ease-out;
+  animation: crack-in 0.12s ease-out;
 }
 @keyframes crack-in {
   from { transform: scale(0.35); opacity: 0.2; }
   to { transform: scale(1); opacity: 1; }
 }
 
-#flash {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0;
-}
-
+/* 不能有 transform / z-index,否则会自成层叠上下文,卡片就没法盖在玻璃上面 */
 #stage {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 0;
-  transform: translateX(-50%);
   display: flex;
+  justify-content: center;
   align-items: flex-end;
   gap: 3vw;
+  pointer-events: none;
 }
 
 #buddy {
   position: relative;
   pointer-events: none; /* 拳头砸出来时别挡住按钮 */
-  margin-bottom: -5vh; /* 像是从屏幕下沿探出头来 */
+  margin-bottom: calc(-5vh * var(--scale, 1)); /* 像是从屏幕下沿探出头来 */
 }
-#figure {
-  filter: drop-shadow(0 12px 24px rgba(0, 0, 0, 0.45));
-}
-#figure svg {
-  display: block;
-  height: 62vh;
-  width: auto;
-  overflow: visible;
-}
-#figure img {
-  display: block;
-  height: 40vh;
-  max-width: 50vw;
-  object-fit: contain;
-}
-/* 精灵图画在 canvas 上;四周羽化一下,遮住拳头和碎玻璃被格子边缘截断的硬边 */
+#figure { position: relative; }
 #figure.sprite { transform-origin: 40% 60%; }
-#figure.sprite canvas {
-  display: block;
-  height: min(72vh, 52vw);
-  aspect-ratio: 1;
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 10%, #000 93%, transparent), linear-gradient(to bottom, transparent, #000 4%);
-  -webkit-mask-composite: source-in;
-  mask-image: linear-gradient(to right, transparent, #000 10%, #000 93%, transparent), linear-gradient(to bottom, transparent, #000 4%);
-  mask-composite: intersect;
+#figure canvas.char { position: absolute; display: block; }
+/* 用了 WebGL 时形象由玻璃画布来画,这里只占位、给位置 */
+body.webgl #figure canvas.char { visibility: hidden; }
+#figure img.src {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
 }
+
+/* ---------- 提醒卡片 ---------- */
 
 #bubble {
+  --ink: #1b2033;
+  --muted: #7a7f93;
+  --accent: #ff7a2f;
+  --paper: #fdfcfa;
   position: relative;
+  z-index: 3;
+  pointer-events: auto;
   flex: none;
+  box-sizing: border-box;
   width: max-content;
-  min-width: 340px;
-  max-width: min(560px, 45vw);
-  margin-bottom: 16vh;
-  padding: 26px 32px 20px;
-  border-radius: 26px;
-  background: #fffaf2;
-  color: #2b2118;
-  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.4), 0 0 0 4px #ff8a3d;
-  text-align: center;
-  transform-origin: 0 100%;
-  transition: transform 0.35s cubic-bezier(.34, 1.56, .64, 1), opacity 0.25s;
+  min-width: 320px;
+  max-width: min(460px, 40vw);
+  margin-bottom: max(9vh, calc(19vh * var(--scale, 1)));
+  padding: 20px 24px 18px;
+  border-radius: 22px;
+  background: var(--paper);
+  color: var(--ink);
+  filter: drop-shadow(0 22px 34px rgba(6, 10, 28, 0.36)) drop-shadow(0 2px 3px rgba(6, 10, 28, 0.18));
+  transform-origin: 0 85%;
+  transition: transform 0.55s cubic-bezier(.3, 1.5, .55, 1), opacity 0.2s;
 }
-/* 左下角两个小圆点,指向形象 */
-#bubble::before,
-#bubble::after {
+/* 朝向形象的小尾巴 */
+#bubble::before {
   content: "";
   position: absolute;
-  border-radius: 50%;
-  background: #fffaf2;
-  box-shadow: 0 0 0 4px #ff8a3d;
+  left: -7px;
+  bottom: 30px;
+  width: 20px;
+  height: 20px;
+  border-radius: 0 0 0 5px;
+  background: var(--paper);
+  transform: rotate(45deg) skew(10deg, 10deg);
 }
-#bubble::before { left: -30px; bottom: -14px; width: 26px; height: 26px; }
-#bubble::after { left: -56px; bottom: -40px; width: 14px; height: 14px; }
-#bubble.hidden { transform: scale(0.4); opacity: 0; pointer-events: none; }
+#bubble.hidden {
+  transform: translate(-30px, 16px) scale(0.55) rotate(-5deg);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.eyebrow .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.4s ease-out infinite;
+}
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(255, 122, 47, 0.55); }
+  100% { box-shadow: 0 0 0 7px rgba(255, 122, 47, 0); }
+}
+#clock { font-variant-numeric: tabular-nums; color: var(--ink); }
 
 #title {
-  font-size: 44px;
+  margin-top: 8px;
+  font-size: 38px;
   font-weight: 800;
-  letter-spacing: 2px;
-  color: #ff6a1a;
+  line-height: 1.15;
+  letter-spacing: 0.02em;
 }
 #message {
   margin-top: 8px;
-  font-size: 22px;
-  line-height: 1.5;
+  font-size: 16px;
+  line-height: 1.65;
+  color: #4a4f64;
   white-space: pre-wrap;
 }
 #message:empty { display: none; }
 
 #actions {
-  position: relative;
-  z-index: 1;
   display: flex;
-  gap: 12px;
-  justify-content: center;
-  margin-top: 20px;
+  gap: 8px;
+  margin-top: 18px;
 }
 #actions button {
   font: inherit;
-  font-size: 18px;
+  font-size: 15px;
   font-weight: 600;
-  padding: 10px 26px;
-  border-radius: 999px;
-  border: 2px solid #e8d8c6;
-  background: #fff;
-  color: #6b5a4b;
+  padding: 11px 18px;
+  border: none;
+  border-radius: 12px;
   cursor: pointer;
-  transition: transform 0.1s, background 0.15s;
+  white-space: nowrap;
+  transition: transform 0.12s, background 0.15s, box-shadow 0.15s;
 }
-#actions button:hover { background: #fff2e4; }
-#actions button:active { transform: scale(0.95); }
-#actions button.primary {
-  background: #ff8a3d;
-  border-color: #ff8a3d;
+#actions button:active { transform: scale(0.96); }
+#actions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#actions .primary {
+  flex: 1;
+  background: var(--accent);
   color: #fff;
+  box-shadow: 0 8px 18px -8px rgba(255, 100, 20, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.25);
 }
-#actions button.primary:hover { background: #ff7a24; }
+#actions .primary:hover { background: #f86c1e; }
+#snooze { background: #f1efeb; color: #41465b; }
+#snooze:hover { background: #e9e6e0; }
 
 #countdown {
-  position: relative;
-  z-index: 1;
-  margin-top: 10px;
-  font-size: 13px;
-  color: #a8968a;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: #a0a3b2;
 }
-#countdown:empty { display: none; }
+kbd {
+  font: inherit;
+  font-size: 11px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: #f1efeb;
+  color: var(--muted);
+}
+.progress {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  overflow: hidden;
+}
+.progress i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffc08f, var(--accent));
+  transform-origin: left;
+}
 
-#bangs { position: absolute; inset: 0; pointer-events: none; }
+/* ---------- 咚! ---------- */
+
 .bang {
   position: absolute;
-  font-size: 64px;
+  font-size: 60px;
   font-weight: 900;
   color: #fff;
   -webkit-text-stroke: 3px #ff5a1a;
@@ -206,6 +255,7 @@ body.dim #dim { opacity: 1; }
 
 body.leaving #cracks,
 body.leaving #flash,
+body.leaving #debris,
 body.leaving #bangs { opacity: 0; }
 body.leaving #dim { opacity: 0; }
-body.leaving #bubble { transform: scale(0.6); opacity: 0; }
+body.leaving #bubble { transform: translate(-10px, 10px) scale(0.7); opacity: 0; }

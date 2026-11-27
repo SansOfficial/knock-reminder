@@ -53,6 +53,7 @@ function render() {
     if (el.type === 'checkbox') el.checked = v;
     else el.value = v;
   }
+  $('#scale-val').textContent = `${Math.round((cfg.settings.scale ?? 0.55) * 100)}%`;
 }
 
 $('#list').addEventListener('click', (e) => {
@@ -78,6 +79,11 @@ $('#paused').addEventListener('change', (e) => {
 });
 
 for (const el of document.querySelectorAll('[data-key]')) {
+  if (el.dataset.key === 'scale') {
+    el.addEventListener('input', () => {
+      $('#scale-val').textContent = `${Math.round(Number(el.value) * 100)}%`;
+    });
+  }
   el.addEventListener('change', () => {
     const k = el.dataset.key;
     cfg.settings[k] = el.type === 'checkbox' ? el.checked : el.type === 'number' || el.type === 'range' ? Number(el.value) : el.value;
